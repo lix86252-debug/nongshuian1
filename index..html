@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>农水安 - 农村饮水安全检测服务平台</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Noto Sans SC', sans-serif; background-color: #f5f7fa; }
+        
+        /* 动画设定 */
+        .fade-in { animation: fadeIn 0.4s ease-out forwards; }
+        .slide-up { animation: slideUp 0.4s ease-out forwards; }
+        .scale-in { animation: scaleIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes scaleIn { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: scale(1); } }
+        
+        .spinner {
+            border: 2px solid rgba(255, 255, 255, 0.3); border-radius: 50%;
+            border-top: 2px solid white; width: 24px; height: 24px; animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* 隐藏滚动条但允许滚动 */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* 进度条基础样式 */
+        progress { -webkit-appearance: none; appearance: none; height: 6px; border-radius: 4px; overflow: hidden; }
+        progress::-webkit-progress-bar { background-color: #EEEEEE; }
+        progress.safe::-webkit-progress-value { background-color: #4CAF50; }
+        progress.danger::-webkit-progress-value { background-color: #E53935; }
+    </style>
+</head>
+<body class="flex justify-center items-center min-h-screen">
+
+    <div id="app-container" class="w-full max-w-[400px] h-[800px] bg-white rounded-[30px] shadow-2xl overflow-hidden relative border-8 border-gray-800 flex flex-col">
+        
+        <div id="splash-screen" class="absolute inset-0 bg-[#1E88E5] z-[100] flex flex-col justify-center items-center text-white scale-in">
+            <div class="w-[100px] h-[100px] bg-white rounded-[24px] overflow-hidden shadow-lg flex items-center justify-center mb-6">
+                <i class="fa-solid fa-droplet text-[#1E88E5] text-5xl"></i>
+            </div>
+            <h1 class="text-3xl font-bold tracking-[4px]">农水安</h1>
+            <p class="text-sm opacity-80 mt-2">农村饮水安全检测服务平台</p>
+        </div>
+
+        <div id="role-select-screen" class="hidden absolute inset-0 bg-[#f5f7fa] z-[90] p-6 flex flex-col">
+            <div class="mt-[60px] flex flex-col items-center text-center fade-in">
+                <div class="w-[72px] h-[72px] bg-white rounded-[20px] overflow-hidden shadow-md flex items-center justify-center">
+                    <i class="fa-solid fa-droplet text-[#1E88E5] text-3xl"></i>
+                </div>
+                <h2 class="text-[26px] font-bold text-[#1E88E5] tracking-[3px] mt-4">农水安</h2>
+                <p class="text-sm text-gray-500 mt-1">请选择您的身份</p>
+            </div>
+            <div class="mt-12 flex flex-col gap-4">
+                <div onclick="navTo('login', 'farmer')" class="h-[72px] bg-white rounded-[14px] shadow-sm flex items-center p-4 cursor-pointer hover:scale-[0.98] slide-up" style="animation-delay: 0.1s">
+                    <div class="w-10 h-10 bg-[#E1F5EE] rounded-full flex items-center justify-center text-[#1E88E5]"><i class="fa-solid fa-tractor text-xl"></i></div>
+                    <div class="ml-3 flex-1"><h4 class="text-base font-semibold text-gray-800">农户 / 村委</h4><p class="text-[12px] text-gray-500 mt-0.5 truncate">查看水质报告、预约检测、购买净水产品</p></div>
+                    <i class="fa-solid fa-chevron-right text-xs text-gray-400"></i>
+                </div>
+                <div onclick="navTo('login', 'worker')" class="h-[72px] bg-white rounded-[14px] shadow-sm flex items-center p-4 cursor-pointer hover:scale-[0.98] slide-up" style="animation-delay: 0.2s">
+                    <div class="w-10 h-10 bg-[#E1F5EE] rounded-full flex items-center justify-center text-[#2E7D6F]"><i class="fa-solid fa-flask text-xl"></i></div>
+                    <div class="ml-3 flex-1"><h4 class="text-base font-semibold text-gray-800">采样员</h4><p class="text-[12px] text-gray-500 mt-0.5 truncate">执行采样任务、录入检测数据、提交报告</p></div>
+                    <i class="fa-solid fa-chevron-right text-xs text-gray-400"></i>
+                </div>
+                <div onclick="navTo('login', 'admin')" class="h-[72px] bg-white rounded-[14px] shadow-sm flex items-center p-4 cursor-pointer hover:scale-[0.98] slide-up" style="animation-delay: 0.3s">
+                    <div class="w-10 h-10 bg-[#E1F5EE] rounded-full flex items-center justify-center text-[#1B5E50]"><i class="fa-solid fa-user-shield text-xl"></i></div>
+                    <div class="ml-3 flex-1"><h4 class="text-base font-semibold text-gray-800">管理员</h4><p class="text-[12px] text-gray-500 mt-0.5 truncate">管理站点数据、审核报告、系统配置</p></div>
+                    <i class="fa-solid fa-chevron-right text-xs text-gray-400"></i>
+                </div>
+            </div>
+        </div>
+
+        <div id="login-screen" class="hidden absolute inset-0 bg-white z-[80] flex flex-col">
+            <div id="login-header" class="h-[90px] w-full flex items-end p-4 text-white transition-colors duration-300">
+                <button onclick="navTo('role-select')" class="mr-1 text-white p-2"><i class="fa-solid fa-chevron-left"></i></button>
+                <span id="login-title-text" class="text-lg font-semibold ml-1">登录</span>
+            </div>
+            <div class="p-6 flex-1 overflow-y-auto">
+                <div id="role-badge" class="inline-flex items-center px-3 py-1.5 rounded-[20px] text-[13px] font-semibold mb-8 transition-colors">
+                    <i id="role-badge-icon" class="fa-solid mr-1.5"></i><span id="role-badge-text"></span>
+                </div>
+                <div class="mb-4 border border-gray-300 rounded-[14px] flex items-center p-3 focus-within:border-[#1E88E5]" id="phone-box">
+                    <i class="fa-solid fa-mobile-screen text-gray-400 mx-2"></i>
+                    <input type="tel" placeholder="请输入手机号" class="w-full text-sm focus:outline-none text-gray-800">
+                </div>
+                <div class="mb-8 border border-gray-300 rounded-[14px] flex items-center p-3 focus-within:border-[#1E88E5]" id="code-box">
+                    <i class="fa-solid fa-lock text-gray-400 mx-2"></i>
+                    <input type="number" placeholder="请输入验证码" class="w-full text-sm focus:outline-none text-gray-800">
+                    <button id="countdown-btn" onclick="startCountdown()" class="text-[13px] font-medium whitespace-nowrap px-2">获取验证码</button>
+                </div>
+                <div class="flex justify-center items-center">
+                    <button id="login-submit-btn" onclick="handleLogin()" class="w-full h-[52px] text-white font-semibold text-base rounded-[14px] flex items-center justify-center transition-all duration-300">
+                        <span id="login-btn-content">登 录</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="main-shell" class="hidden flex-1 flex flex-col h-full bg-[#f5f7fa]">
+            <div id="views-container" class="flex-1 overflow-y-auto no-scrollbar relative bg-white">
+                
+                <div id="view-home" class="absolute inset-0 overflow-y-auto hidden pb-6">
+                    <div class="h-14 bg-white px-4 flex items-center justify-between sticky top-0 z-10">
+                        <div class="flex items-center"><span class="text-xl font-bold text-[#1E88E5]">农水安</span><span class="text-[13px] text-gray-500 ml-2">示范村</span></div>
+                        <div class="relative p-2"><i class="fa-regular fa-bell text-xl text-gray-600"></i><span class="absolute top-2 right-2 w-2 h-2 bg-[#E53935] rounded-full"></span></div>
+                    </div>
+                    <div class="px-4 py-3">
+                        <div onclick="navToSub('report-detail', AppData.reports[0])" class="h-[140px] bg-gradient-to-r from-[#1E88E5] to-[#42A5F5] rounded-[16px] p-5 text-white relative shadow-lg shadow-blue-500/30 overflow-hidden cursor-pointer">
+                            <i class="fa-solid fa-water opacity-10 text-[120px] absolute -right-2 -bottom-2"></i>
+                            <div class="flex flex-col h-full justify-center relative z-10">
+                                <p class="text-white/70 text-[13px] mb-2">您所在区域最新水质状态</p>
+                                <div class="flex items-center gap-3">
+                                    <span class="bg-[#4CAF50] text-white text-base font-bold px-[14px] py-[6px] rounded-[20px]">达标</span>
+                                    <span class="text-white/70 text-[13px]">上次检测：5/10</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 px-4 mb-6">
+                        <div class="p-3 bg-white rounded-xl border border-gray-100 flex items-center gap-3 shadow-sm cursor-pointer">
+                            <div class="text-[#1E88E5]"><i class="fa-regular fa-calendar-check text-[22px]"></i></div>
+                            <div><h5 class="text-[15px] font-medium text-gray-800">预约检测</h5><p class="text-xs text-gray-400">在线预约采样</p></div>
+                        </div>
+                        <div onclick="switchTab('view-report')" class="p-3 bg-white rounded-xl border border-gray-100 flex items-center gap-3 shadow-sm cursor-pointer">
+                            <div class="text-[#1E88E5]"><i class="fa-solid fa-chart-simple text-[22px]"></i></div>
+                            <div><h5 class="text-[15px] font-medium text-gray-800">查看报告</h5><p class="text-xs text-gray-400">查看水质报告</p></div>
+                        </div>
+                        <div class="p-3 bg-white rounded-xl border border-gray-100 flex items-center gap-3 shadow-sm cursor-pointer">
+                            <div class="text-[#1E88E5]"><i class="fa-solid fa-bag-shopping text-[22px]"></i></div>
+                            <div><h5 class="text-[15px] font-medium text-gray-800">整改商城</h5><p class="text-xs text-gray-400">推荐净化产品</p></div>
+                        </div>
+                        <div class="p-3 bg-white rounded-xl border border-gray-100 flex items-center gap-3 shadow-sm cursor-pointer">
+                            <div class="text-[#1E88E5]"><i class="fa-solid fa-phone text-[22px]"></i></div>
+                            <div><h5 class="text-[15px] font-medium text-gray-800">联系采样员</h5><p class="text-xs text-gray-400">一键联系</p></div>
+                        </div>
+                    </div>
+                    <div class="px-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="text-[17px] font-semibold text-gray-800">最近检测</h3>
+                            <span onclick="switchTab('view-report')" class="text-[13px] text-[#1E88E5] cursor-pointer">查看全部</span>
+                        </div>
+                        <div id="home-reports-list" class="space-y-3"></div>
+                    </div>
+                </div>
+
+                <div id="view-map" class="absolute inset-0 hidden flex flex-col">
+                    <div id="leaflet-map" class="flex-1 relative z-0"></div>
+                    <button onclick="locateMe()" class="absolute right-4 top-4 w-11 h-11 bg-white rounded-full shadow-md z-[400] flex items-center justify-center text-[#1E88E5]">
+                        <i id="locate-icon" class="fa-solid fa-location-crosshairs text-[22px]"></i>
+                    </button>
+                    <div class="h-[250px] bg-white rounded-t-[20px] shadow-[0_-2px_10px_rgba(0,0,0,0.1)] z-[400] overflow-y-auto p-4 flex flex-col relative">
+                        <div class="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-3"></div>
+                        <div id="map-station-list" class="flex-1 space-y-1"></div>
+                    </div>
+                </div>
+
+                <div id="view-report" class="absolute inset-0 hidden flex flex-col bg-[#f5f7fa]">
+                    <div class="h-14 bg-white flex items-center justify-center border-b border-gray-200 shrink-0">
+                        <span class="text-[18px] font-semibold">水质报告</span>
+                    </div>
+                    <div class="flex bg-white border-b border-gray-200 text-[14px] shrink-0">
+                        <div onclick="switchReportTab(0)" id="rtab-0" class="flex-1 text-center py-3 border-b-2 border-[#1E88E5] text-[#1E88E5] font-semibold cursor-pointer">本村报告</div>
+                        <div onclick="switchReportTab(1)" id="rtab-1" class="flex-1 text-center py-3 border-b-2 border-transparent text-gray-500 cursor-pointer">历史报告</div>
+                        <div onclick="switchReportTab(2)" id="rtab-2" class="flex-1 text-center py-3 border-b-2 border-transparent text-gray-500 cursor-pointer">全部指标</div>
+                    </div>
+                    <div class="flex-1 overflow-y-auto p-4">
+                        <div id="rtab-content-0" class="block space-y-5"></div>
+                        <div id="rtab-content-1" class="hidden space-y-3"></div>
+                        <div id="rtab-content-2" class="hidden space-y-3"></div>
+                    </div>
+                </div>
+
+                <div id="view-profile" class="absolute inset-0 hidden flex flex-col bg-[#f5f7fa] overflow-y-auto pb-8">
+                    <div class="h-14 bg-white flex items-center justify-center border-b border-gray-200 shrink-0 sticky top-0 z-10">
+                        <span class="text-[18px] font-semibold">我的</span>
+                    </div>
+                    <div class="m-4 p-5 bg-white rounded-[16px] shadow-sm flex items-center">
+                        <div class="w-[60px] h-[60px] rounded-full border-2 border-[#1E88E5] bg-[#f5f7fa] flex items-center justify-center text-[#1E88E5]"><i class="fa-solid fa-user text-[32px]"></i></div>
+                        <div class="ml-4 flex-1">
+                            <h2 class="text-[18px] font-bold text-gray-800">张三</h2>
+                            <p class="text-[13px] text-gray-500 mt-1">示范村</p>
+                        </div>
+                        <i class="fa-regular fa-pen-to-square text-gray-400"></i>
+                    </div>
+                    <div class="mx-4 p-4 bg-white rounded-[16px] shadow-sm space-y-4">
+                        <div class="flex justify-between"><span class="text-[14px] text-gray-500">手机号</span><span class="text-[14px] font-medium text-gray-800">138****8888</span></div>
+                        <div class="border-t border-gray-100"></div>
+                        <div class="flex justify-between"><span class="text-[14px] text-gray-500">绑定村庄</span><span class="text-[14px] font-medium text-gray-800">示范村</span></div>
+                        <div class="border-t border-gray-100"></div>
+                        <div class="flex justify-between"><span class="text-[14px] text-gray-500">检测次数</span><span class="text-[14px] font-medium text-gray-800">12次</span></div>
+                        <div class="border-t border-gray-100"></div>
+                        <div class="flex justify-between"><span class="text-[14px] text-gray-500">账号等级</span><span class="text-[14px] font-medium text-gray-800">普通用户</span></div>
+                    </div>
+                    <div class="mx-4 mt-4 text-[13px] text-gray-500 font-medium mb-1">我的服务</div>
+                    <div class="mx-4 bg-white rounded-[16px] shadow-sm overflow-hidden">
+                        <div onclick="navToSub('order-list')" class="flex items-center p-4 border-b border-gray-50 cursor-pointer">
+                            <i class="fa-solid fa-receipt text-[#1E88E5] text-[20px] w-8"></i><span class="flex-1 text-[15px]">我的订单</span><i class="fa-solid fa-chevron-right text-gray-300"></i>
+                        </div>
+                        <div class="flex items-center p-4 border-b border-gray-50 cursor-pointer">
+                            <i class="fa-regular fa-calendar text-[#1E88E5] text-[20px] w-8"></i><span class="flex-1 text-[15px]">预约记录</span><i class="fa-solid fa-chevron-right text-gray-300"></i>
+                        </div>
+                        <div onclick="switchTab('view-report')" class="flex items-center p-4 cursor-pointer">
+                            <i class="fa-solid fa-chart-pie text-[#1E88E5] text-[20px] w-8"></i><span class="flex-1 text-[15px]">检测报告</span><i class="fa-solid fa-chevron-right text-gray-300"></i>
+                        </div>
+                    </div>
+                    <div class="mx-4 mt-4 text-[13px] text-gray-500 font-medium mb-1">帮助与反馈</div>
+                    <div class="mx-4 bg-white rounded-[16px] shadow-sm overflow-hidden mb-4">
+                        <div class="flex items-center p-4 border-b border-gray-50 cursor-pointer">
+                            <i class="fa-solid fa-book-open text-[#1E88E5] text-[20px] w-8"></i><span class="flex-1 text-[15px]">使用指南</span><i class="fa-solid fa-chevron-right text-gray-300"></i>
+                        </div>
+                        <div class="flex items-center p-4 border-b border-gray-50 cursor-pointer">
+                            <i class="fa-solid fa-headset text-[#1E88E5] text-[20px] w-8"></i><span class="flex-1 text-[15px]">联系我们</span><i class="fa-solid fa-chevron-right text-gray-300"></i>
+                        </div>
+                        <div class="flex items-center p-4 cursor-pointer">
+                            <i class="fa-solid fa-circle-info text-[#1E88E5] text-[20px] w-8"></i><span class="flex-1 text-[15px]">关于农水安</span><i class="fa-solid fa-chevron-right text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="view-worker-tasks" class="absolute inset-0 hidden flex flex-col bg-[#f5f7fa]">
+                    <div class="h-14 bg-[#2E7D6F] text-white flex items-center justify-between px-4 sticky top-0 z-10">
+                        <span class="text-[18px] font-bold">工作台 - 采样任务</span>
+                        <i class="fa-solid fa-rotate-right cursor-pointer text-sm"></i>
+                    </div>
+                    <div class="flex bg-white border-b border-gray-200 text-[14px]">
+                        <div class="flex-1 text-center py-3 border-b-2 border-[#2E7D6F] text-[#2E7D6F] font-semibold">进行中</div>
+                        <div class="flex-1 text-center py-3 border-b-2 border-transparent text-gray-500">已完成</div>
+                    </div>
+                    <div class="flex-1 overflow-y-auto p-4 space-y-4" id="worker-task-list"></div>
+                </div>
+
+            </div>
+
+            <div id="bottom-nav-user" class="h-14 bg-white border-t border-gray-200 flex items-center justify-around shrink-0 pb-1">
+                <div onclick="switchTab('view-home')" id="nav-view-home" class="flex flex-col items-center justify-center text-[#1E88E5] cursor-pointer w-16"><i class="fa-solid fa-house text-[20px]"></i><span class="text-[10px] mt-1">首页</span></div>
+                <div onclick="switchTab('view-map')" id="nav-view-map" class="flex flex-col items-center justify-center text-gray-400 cursor-pointer w-16"><i class="fa-solid fa-map-location-dot text-[20px]"></i><span class="text-[10px] mt-1">地图</span></div>
+                <div onclick="navToSub('product-detail', AppData.products[0])" class="flex flex-col items-center justify-center text-gray-400 cursor-pointer w-16"><i class="fa-solid fa-store text-[20px]"></i><span class="text-[10px] mt-1">商城</span></div>
+                <div onclick="switchTab('view-profile')" id="nav-view-profile" class="flex flex-col items-center justify-center text-gray-400 cursor-pointer w-16"><i class="fa-solid fa-user text-[20px]"></i><span class="text-[10px] mt-1">我的</span></div>
+            </div>
+            <div id="bottom-nav-worker" class="h-14 bg-white border-t border-gray-200 hidden items-center justify-around shrink-0 pb-1">
+                <div class="flex flex-col items-center justify-center text-[#2E7D6F] cursor-pointer w-16"><i class="fa-solid fa-list-check text-[20px]"></i><span class="text-[10px] mt-1">任务</span></div>
+                <div class="flex flex-col items-center justify-center text-gray-400 cursor-pointer w-16"><i class="fa-solid fa-map-location-dot text-[20px]"></i><span class="text-[10px] mt-1">地图</span></div>
+                <div class="flex flex-col items-center justify-center text-gray-400 cursor-pointer w-16"><i class="fa-solid fa-user-gear text-[20px]"></i><span class="text-[10px] mt-1">我的</span></div>
+            </div>
+        </div>
+
+        <div id="sub-report-detail" class="hidden absolute inset-0 bg-[#f5f7fa] z-[200] flex flex-col slide-up">
+            <div class="h-14 bg-white flex items-center px-2 border-b border-gray-200 shrink-0 sticky top-0 z-10">
+                <button onclick="closeSub('sub-report-detail')" class="p-2 text-gray-600 w-10"><i class="fa-solid fa-chevron-left"></i></button>
+                <span class="text-[18px] font-semibold flex-1 text-center pr-10">水质报告详情</span>
+            </div>
+            <div class="flex-1 overflow-y-auto p-4" id="report-detail-content"></div>
+        </div>
+
+        <div id="sub-order-list" class="hidden absolute inset-0 bg-[#f5f7fa] z-[200] flex flex-col slide-up">
+            <div class="h-14 bg-white flex items-center px-2 border-b border-gray-200 shrink-0 sticky top-0 z-10">
+                <button onclick="closeSub('sub-order-list')" class="p-2 text-gray-600 w-10"><i class="fa-solid fa-chevron-left"></i></button>
+                <span class="text-[18px] font-semibold flex-1 text-center pr-10">我的订单</span>
+            </div>
+            <div class="flex-1 overflow-y-auto p-4 space-y-3" id="order-list-content"></div>
+        </div>
+
+        <div id="sub-product-detail" class="hidden absolute inset-0 bg-white z-[200] flex flex-col slide-up">
+            <div class="h-[280px] bg-[#f5f7fa] relative shrink-0 flex justify-center items-center">
+                <button onclick="closeSub('sub-product-detail')" class="absolute top-4 left-2 p-2 text-gray-600 bg-white/50 rounded-full w-9 h-9 flex items-center justify-center backdrop-blur-sm"><i class="fa-solid fa-chevron-left"></i></button>
+                <i class="fa-solid fa-box-open text-[80px] text-gray-300"></i>
+            </div>
+            <div class="flex-1 overflow-y-auto p-4" id="product-detail-content">
+                <h1 class="text-[20px] font-bold text-gray-800">农水安强效净水滤芯套装</h1>
+                <p class="text-[26px] font-bold text-[#1E88E5] mt-2">¥199</p>
+                <h3 class="text-[16px] font-semibold mt-5 mb-2">商品详情</h3>
+                <p class="text-[14px] text-gray-500 leading-relaxed">适用于农村家庭水井、蓄水池的初级过滤，有效去除泥沙、铁锈、大颗粒杂质，同时包含活性炭层，吸附余氯及异色异味。长效守护饮水安全。</p>
+                <div class="bg-[#f5f7fa] p-[14px] rounded-[12px] mt-5 flex items-center text-[12px] text-gray-500">
+                    <i class="fa-solid fa-truck-fast mr-2 text-[14px]"></i>全场包邮 · 7天无理由退换 · 正品保障
+                </div>
+            </div>
+            <div class="p-4 border-t border-gray-100 bg-white flex items-center gap-3 shrink-0 pb-6">
+                <div class="w-11 h-11 border border-gray-200 rounded-[12px] flex items-center justify-center text-gray-500"><i class="fa-solid fa-headset text-[20px]"></i></div>
+                <button class="flex-1 h-11 border border-[#1E88E5] text-[#1E88E5] rounded-[14px] font-medium text-[15px]">加入购物车</button>
+                <button class="flex-1 h-11 bg-[#1E88E5] text-white rounded-[14px] font-medium text-[15px]">立即购买</button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // --- 数据模型常量 ---
+        const AppData = {
+            indicators: [
+                {name: 'pH值', unit: '', standard: '6.5-8.5', max: 14},
+                {name: '浑浊度', unit: 'NTU', standard: '≤1', max: 5},
+                {name: '余氯', unit: 'mg/L', standard: '0.05-4', max: 5},
+                {name: '菌落总数', unit: 'CFU/mL', standard: '≤100', max: 300},
+                {name: '硝酸盐', unit: 'mg/L', standard: '≤10', max: 20},
+                {name: '氨氮', unit: 'mg/L', standard: '≤0.5', max: 2}
+            ],
+            statusStyles: {
+                safe: { c: '#4CAF50', bg: '#E8F5E9', l: '安全达标', sl: '达标' },
+                warning: { c: '#FFC107', bg: '#FFFDE7', l: '轻微超标', sl: '轻微超标' },
+                danger: { c: '#E53935', bg: '#FFEBEE', l: '超标预警', sl: '超标预警' }
+            },
+            orderStyles: {
+                pending: { c: '#2196F3', l: '待采样' },
+                sampling: { c: '#FF9800', l: '采样中' },
+                reportReady: { c: '#9C27B0', l: '报告已出' },
+                completed: { c: '#4CAF50', l: '已完成' }
+            },
+            reports: [
+                { id: '1', date: '2026-05-10', loc: '村东水井', inst: '县水质检测中心', st: 'safe', vals: {'pH值': 7.2, '浑浊度': 0.5, '余氯': 0.3, '菌落总数': 12, '硝酸盐': 3.2, '氨氮': 0.1} },
+                { id: '2', date: '2026-05-05', loc: '村西蓄水池', inst: '县水质检测中心', st: 'warning', vals: {'pH值': 6.8, '浑浊度': 1.2, '余氯': 0.08, '菌落总数': 85, '硝酸盐': 8.5, '氨氮': 0.3} },
+                { id: '3', date: '2026-04-28', loc: '村北水源地', inst: '市疾控中心', st: 'danger', vals: {'pH值': 6.2, '浑浊度': 3.5, '余氯': 0.02, '菌落总数': 210, '硝酸盐': 12.8, '氨氮': 0.8} }
+            ],
+            stations: [
+                { id: '1', n: '村东水井', lat: 36.06, lng: 120.38, st: 'safe', dist: 0.3 },
+                { id: '2', n: '村西蓄水池', lat: 36.055, lng: 120.37, st: 'warning', dist: 0.8 },
+                { id: '3', n: '村北水源地', lat: 36.065, lng: 120.375, st: 'danger', dist: 1.2 },
+                { id: '4', n: '村南供水站', lat: 36.052, lng: 120.385, st: 'safe', dist: 1.5 }
+            ],
+            orders: [
+                { id: '1', type: '水质检测', date: '2026-05-12', st: 'pending' },
+                { id: '2', type: '水质检测', date: '2026-05-08', st: 'sampling' },
+                { id: '3', type: '水质检测', date: '2026-05-01', st: 'reportReady' },
+                { id: '4', type: '水质检测', date: '2026-04-20', st: 'completed' }
+            ],
+            tasks: [
+                { id: '1', no: 'T1001', user: '张三', v: '示范村', time: '14:00', addr: '村东路1号', st: 'pending' },
+                { id: '2', no: 'T1002', user: '李四', v: '示范村', time: '15:30', addr: '村西路8号', st: 'inProgress' },
+                { id: '3', no: 'T1003', user: '王五', v: '示范村', time: '16:00', addr: '村北路12号', st: 'completed' }
+            ],
+            products: [{ id: '1', name: '农水安强效净水滤芯套装', price: 199, desc: '适用于农村家庭水井、蓄水池的初级过滤...' }]
+        };
+
+        // --- 核心控制 ---
+        let currentRole = 'farmer';
+        let countdown = 0; let timer = null;
+        let map = null;
+
+        window.onload = () => {
+            setTimeout(() => { navTo('role-select'); }, 1500);
+            renderHomeReports();
+            renderOrders();
+            renderReportTabs();
+            renderWorkerTasks();
+        };
+
+        function navTo(screen, role = '') {
+            ['splash-screen', 'role-select-screen', 'login-screen', 'main-shell'].forEach(id => document.getElementById(id).classList.add('hidden'));
+            if(screen === 'login') {
+                currentRole = role; setupLoginUI();
+            }
+            if(screen !== 'main-shell') {
+                document.getElementById(screen + '-screen').classList.remove('hidden');
+                document.getElementById(screen + '-screen').classList.add('fade-in');
+            } else {
+                document.getElementById('main-shell').classList.remove('hidden');
+                setupMainShell();
+            }
+        }
+
+        function setupLoginUI() {
+            const h = document.getElementById('login-header'); const bBtn = document.getElementById('login-submit-btn');
+            const badge = document.getElementById('role-badge'); const bI = document.getElementById('role-badge-icon');
+            const bT = document.getElementById('role-badge-text'); const tT = document.getElementById('login-title-text');
+            
+            let c = currentRole === 'farmer' ? '#1E88E5' : currentRole === 'worker' ? '#2E7D6F' : '#1B5E50';
+            let txt = currentRole === 'farmer' ? '农户 / 村委' : currentRole === 'worker' ? '采样员' : '管理员';
+            let icon = currentRole === 'farmer' ? 'fa-tractor' : currentRole === 'worker' ? 'fa-flask' : 'fa-user-shield';
+
+            h.style.backgroundColor = c; bBtn.style.backgroundColor = c;
+            badge.style.backgroundColor = c + '1A'; badge.style.color = c;
+            bT.innerText = txt + '身份'; bI.className = `fa-solid ${icon} mr-1.5`;
+            tT.innerText = txt + '登录';
+        }
+
+        function startCountdown() {
+            if(countdown > 0) return;
+            countdown = 60; const btn = document.getElementById('countdown-btn'); btn.style.color = '#9ca3af';
+            timer = setInterval(() => {
+                countdown--;
+                if(countdown <= 0) {
+                    clearInterval(timer); btn.innerText = '获取验证码';
+                    btn.style.color = currentRole === 'farmer' ? '#1E88E5' : currentRole === 'worker' ? '#2E7D6F' : '#1B5E50';
+                } else btn.innerText = `${countdown}s后重新获取`;
+            }, 1000);
+        }
+
+        function handleLogin() {
+            const btn = document.getElementById('login-submit-btn'); const content = document.getElementById('login-btn-content');
+            content.innerHTML = '<div class="spinner"></div>'; btn.disabled = true;
+            setTimeout(() => {
+                content.innerHTML = '<i class="fa-solid fa-check text-xl"></i>';
+                setTimeout(() => { navTo('main-shell'); content.innerHTML = '登 录'; btn.disabled = false; }, 400);
+            }, 1200);
+        }
+
+        function setupMainShell() {
+            if(currentRole === 'worker') {
+                document.getElementById('bottom-nav-user').classList.add('hidden');
+                document.getElementById('bottom-nav-worker').classList.replace('hidden', 'flex');
+                switchTab('view-worker-tasks');
+            } else {
+                document.getElementById('bottom-nav-worker').classList.add('hidden');
+                document.getElementById('bottom-nav-user').classList.replace('hidden', 'flex');
+                switchTab('view-home');
+            }
+        }
+
+        // --- 选项卡切换 ---
+        function switchTab(viewId) {
+            ['view-home', 'view-map', 'view-report', 'view-profile', 'view-worker-tasks'].forEach(id => {
+                const el = document.getElementById(id); if(el) el.classList.add('hidden');
+            });
+            document.getElementById(viewId).classList.remove('hidden');
+            document.getElementById(viewId).classList.add('fade-in');
+            
+            if(currentRole !== 'worker') {
+                ['nav-view-home', 'nav-view-map', 'nav-view-profile'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if(el) { el.classList.remove('text-[#1E88E5]'); el.classList.add('text-gray-400'); }
+                });
+                if(viewId !== 'view-report') {
+                    const act = document.getElementById('nav-' + viewId);
+                    if(act) { act.classList.remove('text-gray-400'); act.classList.add('text-[#1E88E5]'); }
+                }
+            }
+
+            if(viewId === 'view-map' && !map) initMap();
+        }
+
+        // --- 地图模块 ---
+        function initMap() {
+            map = L.map('leaflet-map', {zoomControl: false}).setView([36.058, 120.378], 14);
+            L.tileLayer('https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
+                maxZoom: 18, attribution: '高德地图'
+            }).addTo(map);
+
+            const listCont = document.getElementById('map-station-list'); listCont.innerHTML = '';
+            AppData.stations.forEach(st => {
+                const sMeta = AppData.statusStyles[st.st];
+                // 渲染 Marker
+                const icon = L.divIcon({
+                    html: `<div class="w-9 h-9 rounded-full border-2 border-white shadow-md flex items-center justify-center text-white" style="background-color: ${sMeta.c}; box-shadow: 0 0 6px ${sMeta.c}80;"><i class="fa-solid fa-droplet text-[16px]"></i></div>`,
+                    className: '', iconSize: [36, 36], iconAnchor: [18, 18]
+                });
+                L.marker([st.lat, st.lng], {icon: icon}).addTo(map).bindPopup(`<b>${st.n}</b><br><span style="color:${sMeta.c}">${sMeta.l}</span>`);
+                
+                // 渲染底部列表
+                listCont.innerHTML += `
+                    <div onclick="map.setView([${st.lat}, ${st.lng}], 15)" class="flex items-center justify-between p-3 border-b border-gray-50 cursor-pointer">
+                        <div class="flex items-center"><div class="w-2.5 h-2.5 rounded-full mr-3" style="background-color: ${sMeta.c}"></div>
+                        <div><div class="text-[15px] font-medium text-gray-800">${st.n}</div><div class="text-[12px] text-gray-500">${st.dist}km</div></div></div>
+                        <i class="fa-solid fa-chevron-right text-gray-300 text-sm"></i>
+                    </div>`;
+            });
+        }
+        function locateMe() {
+            const btn = document.getElementById('locate-icon'); btn.className = "spinner !border-[#1E88E5] !border-t-transparent !w-5 !h-5";
+            setTimeout(() => {
+                btn.className = "fa-solid fa-location-crosshairs text-[22px]";
+                map.setView([36.058, 120.378], 15);
+            }, 800);
+        }
+
+        // --- 业务渲染模块 ---
+        function renderHomeReports() {
+            const cont = document.getElementById('home-reports-list'); cont.innerHTML = '';
+            AppData.reports.forEach(r => {
+                const s = AppData.statusStyles[r.st];
+                cont.innerHTML += `
+                    <div onclick="navToSub('report-detail', ${JSON.stringify(r).replace(/"/g, '&quot;')})" class="flex items-center p-4 bg-white rounded-[16px] shadow-sm border border-gray-50 cursor-pointer">
+                        <div class="w-1 h-12 rounded-full mr-3.5" style="background-color: ${s.c}"></div>
+                        <div class="flex-1">
+                            <p class="text-[13px] text-gray-400 mb-0.5">${r.date}</p>
+                            <h4 class="text-[15px] font-medium text-gray-800">${r.loc}</h4>
+                        </div>
+                        <span class="text-[18px] font-bold mr-2" style="color: ${s.c}">${s.sl}</span>
+                        <i class="fa-solid fa-chevron-right text-gray-300"></i>
+                    </div>`;
+            });
+        }
+
+        function renderOrders() {
+            const cont = document.getElementById('order-list-content'); cont.innerHTML = '';
+            AppData.orders.forEach(o => {
+                const s = AppData.orderStyles[o.st];
+                cont.innerHTML += `
+                    <div class="p-4 bg-white rounded-[16px] shadow-sm flex items-center justify-between border border-gray-50">
+                        <div>
+                            <h4 class="text-[16px] font-semibold text-gray-800 mb-1">${o.type}</h4>
+                            <p class="text-[13px] text-gray-500">${o.date}</p>
+                        </div>
+                        <span class="px-3 py-1 rounded-[12px] text-[12px] font-semibold" style="background-color: ${s.c}1A; color: ${s.c}">${s.l}</span>
+                    </div>`;
+            });
+        }
+
+        function renderReportTabs() {
+            // 本村报告
+            const r0 = document.getElementById('rtab-content-0'); const rep = AppData.reports[0]; const s0 = AppData.statusStyles[rep.st];
+            let gHtml = ''; AppData.indicators.forEach(ind => { gHtml += `<div class="bg-white/70 rounded-[10px] p-2 flex flex-col items-center justify-center"><span class="text-[10px] text-gray-500">${ind.name}</span><span class="text-[14px] font-bold mt-0.5" style="color:${s0.c}">${rep.vals[ind.name] || '-'}${ind.unit}</span></div>`; });
+            let pHtml = ''; AppData.indicators.forEach(ind => { pHtml += _buildProgressRow(ind, rep.vals[ind.name] || 0); });
+            r0.innerHTML = `
+                <div class="p-5 rounded-[16px]" style="background-color: ${s0.bg}">
+                    <div class="flex justify-between items-center mb-4"><span class="text-[13px] text-gray-500">综合评级</span><span class="text-[20px] font-bold" style="color:${s0.c}">${s0.l}</span></div>
+                    <div class="grid grid-cols-3 gap-2 mb-3">${gHtml}</div>
+                    <div class="text-[12px] text-gray-500">检测日期：5/10 机构：${rep.inst}</div>
+                </div>
+                <h3 class="text-[17px] font-semibold text-gray-800 pt-2">指标详情</h3>
+                <div class="space-y-2">${pHtml}</div>
+            `;
+            // 历史报告
+            const r1 = document.getElementById('rtab-content-1');
+            AppData.reports.forEach(r => {
+                const s = AppData.statusStyles[r.st];
+                r1.innerHTML += `
+                    <div class="p-4 bg-white rounded-[14px] border border-gray-100 shadow-sm">
+                        <div class="flex justify-between items-center">
+                            <span class="text-[14px] font-semibold">${r.date.substring(5).replace('-','/')}</span>
+                            <span class="px-2 py-0.5 rounded-[10px] text-[12px]" style="background-color:${s.bg}; color:${s.c}">${s.sl}</span>
+                        </div>
+                        <div class="mt-3 text-[13px] text-gray-600">地点：${r.loc} <br>机构：${r.inst}</div>
+                    </div>`;
+            });
+            // 全部指标
+            const r2 = document.getElementById('rtab-content-2');
+            AppData.indicators.forEach(ind => {
+                r2.innerHTML += `
+                    <div class="p-4 bg-white rounded-[14px] border border-gray-100 shadow-sm flex items-center">
+                        <div class="w-10 h-10 rounded-full bg-blue-50 text-[#1E88E5] flex items-center justify-center mr-3.5"><i class="fa-solid fa-droplet text-[20px]"></i></div>
+                        <div><div class="text-[15px] font-medium text-gray-800">${ind.name}</div><div class="text-[12px] text-gray-500">标准范围：${ind.standard}${ind.unit}</div></div>
+                    </div>`;
+            });
+        }
+
+        function switchReportTab(idx) {
+            for(let i=0; i<3; i++) {
+                document.getElementById('rtab-' + i).className = i === idx ? 'flex-1 text-center py-3 border-b-2 border-[#1E88E5] text-[#1E88E5] font-semibold cursor-pointer' : 'flex-1 text-center py-3 border-b-2 border-transparent text-gray-500 cursor-pointer';
+                document.getElementById('rtab-content-' + i).className = i === idx ? 'block space-y-5 fade-in' : 'hidden';
+            }
+        }
+
+        function renderWorkerTasks() {
+            const cont = document.getElementById('worker-task-list'); cont.innerHTML = '';
+            AppData.tasks.forEach(t => {
+                const c = t.st === 'pending' ? '#2196F3' : t.st === 'inProgress' ? '#FF9800' : '#4CAF50';
+                const l = t.st === 'pending' ? '待出发' : t.st === 'inProgress' ? '采样中' : '已完成';
+                cont.innerHTML += `
+                    <div class="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+                        <div class="flex items-center justify-between mb-3"><span class="text-[12px] text-gray-400">单号：${t.no}</span><span class="text-[13px] font-semibold" style="color:${c}">${l}</span></div>
+                        <div class="text-[14px] font-medium text-gray-800 mb-1"><i class="fa-solid fa-user w-5 text-gray-400 text-xs"></i>${t.user} (${t.v})</div>
+                        <div class="text-[12px] text-gray-500 mb-1"><i class="fa-regular fa-clock w-5 text-gray-400"></i>${t.time}</div>
+                        <div class="text-[12px] text-gray-500 mb-3"><i class="fa-solid fa-location-dot w-5 text-gray-400"></i>${t.addr}</div>
+                        <div class="flex justify-end border-t border-gray-50 pt-3">
+                            <button class="px-4 py-1.5 bg-[#2E7D6F] text-white rounded-lg text-[13px] shadow-sm">${t.st === 'inProgress' ? '录入数据' : '开始出发'}</button>
+                        </div>
+                    </div>`;
+            });
+        }
+
+        // --- 子页面调度 ---
+        function navToSub(subId, data = null) {
+            document.getElementById('sub-' + subId).classList.remove('hidden');
+            if(subId === 'report-detail' && data) buildReportDetail(data);
+        }
+        function closeSub(subId) {
+            document.getElementById(subId).classList.add('hidden');
+        }
+
+        // 报告详情构建 (带进度条核心逻辑)
+        function buildReportDetail(report) {
+            const cont = document.getElementById('report-detail-content');
+            const s = AppData.statusStyles[report.st];
+            
+            let chips = ''; AppData.indicators.forEach(ind => { chips += `<div class="bg-white/70 px-2 py-1 rounded-lg text-center"><div class="text-[10px] text-gray-500">${ind.name}</div><div class="text-[13px] font-semibold" style="color:${s.c}">${report.vals[ind.name]||'-'}${ind.unit}</div></div>`; });
+            let rows = ''; AppData.indicators.forEach(ind => { rows += _buildProgressRow(ind, report.vals[ind.name] || 0); });
+            
+            let sugg = report.st !== 'safe' ? `<div class="bg-[#FFFDE7] p-4 rounded-[16px] mt-5"><h3 class="text-[15px] font-semibold text-gray-800 mb-2">整改建议</h3><p class="text-[14px] text-gray-600 mb-3">${report.st==='warning'?'部分指标轻微超标，建议加强日常消毒和滤芯更换。':'多项指标超标严重，请立即停止饮用并联系专业机构处理。'}</p><button class="w-full py-2.5 bg-[#1E88E5] text-white rounded-[14px] text-[14px]">查看推荐净化产品</button></div>` : '';
+
+            cont.innerHTML = `
+                <div class="p-5 rounded-[16px] shadow-sm" style="background-color: ${s.bg}">
+                    <div class="text-[13px] text-gray-500 mb-2">综合评级</div>
+                    <div class="text-[28px] font-bold mb-3" style="color:${s.c}">${s.l}</div>
+                    <div class="grid grid-cols-3 gap-3 mb-3">${chips}</div>
+                    <div class="text-[12px] text-gray-500 mt-2">检测日期：${report.date} 机构：${report.inst}</div>
+                </div>
+                <h3 class="text-[17px] font-semibold text-gray-800 mt-5 mb-3">指标详情</h3>
+                <div class="space-y-2">${rows}</div>
+                ${sugg}
+                <div class="h-10"></div>
+            `;
+        }
+
+        // 判断指标并生成进度条 (完全复刻 Flutter _checkOutOfRange 和 _getProgress)
+        function _buildProgressRow(ind, val) {
+            let outOfRange = false;
+            if(ind.name==='pH值') outOfRange = (val<6.5 || val>8.5);
+            else if(ind.name==='浑浊度') outOfRange = val>1;
+            else if(ind.name==='余氯') outOfRange = (val<0.05 || val>4);
+            else if(ind.name==='菌落总数') outOfRange = val>100;
+            else if(ind.name==='硝酸盐') outOfRange = val>10;
+            else if(ind.name==='氨氮') outOfRange = val>0.5;
+
+            let pct = Math.min((val / ind.max) * 100, 100);
+            let bgClass = outOfRange ? 'bg-[#FFEBEE]' : 'bg-white';
+            let barClass = outOfRange ? 'danger' : 'safe';
+            let valColor = outOfRange ? '#E53935' : '#374151';
+
+            return `
+                <div class="${bgClass} px-3.5 py-2.5 rounded-[12px] flex items-center">
+                    <div class="w-[50px] text-[13px] text-gray-800 truncate">${ind.name}</div>
+                    <div class="flex-1 px-1.5"><progress value="${pct}" max="100" class="w-full ${barClass}"></progress></div>
+                    <div class="w-[80px] text-right flex items-center justify-end">
+                        <span class="text-[13px] font-semibold mr-1" style="color:${valColor}">${val}${ind.unit}</span>
+                        <span class="text-[10px] text-gray-500 shrink-0">${ind.standard}</span>
+                    </div>
+                </div>`;
+        }
+
+    </script>
+</body>
+</html>
